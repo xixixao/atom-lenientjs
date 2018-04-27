@@ -14,23 +14,42 @@ export default {
 
     this.subscriptions.add(
       atom.workspace.observeTextEditors(editor => {
-        const grammarSubscription = editor.observeGrammar(({scopeName}) => {
+        let lastGrammar = null;
+        const grammarSubscription = editor.observeGrammar(grammar => {
+          const {scopeName} = grammar;
+          const hasBackingFile = !!editor.getPath();
           if (
             !editor.buffer.isLenient &&
-            /\.js$/.test(editor.getPath()) &&
+            ((editor.getPath() || '').endsWith('.js') ||
+              ((lastGrammar || {}).scopeName || '').startsWith('source.js')) &&
             scopeName === 'source.coffee'
           ) {
-            editor.buffer.file = getMappedFile(
-              editor.buffer.file,
-              this.onWriteError,
-            );
-            editor.buffer.load({internal: true});
+            if (hasBackingFile) {
+              editor.buffer.file = getMappedFile(editor.buffer.file, error => {
+                this.onWriteError("Couldn't save Lenient file", error);
+              });
+              editor.buffer.load({internal: true});
+            } else {
+              const {jsToLenient} = require('./transpile');
+              transpileEditor(editor, jsToLenient, error => {
+                this.onWriteError("Couldn't convert to Lenient", error);
+                editor.setGrammar(lastGrammar);
+              });
+            }
             editor.buffer.isLenient = true;
           } else if (editor.buffer.isLenient) {
-            editor.buffer.file = editor.buffer.file.originalFile;
-            editor.buffer.load({internal: true});
+            if (hasBackingFile) {
+              editor.buffer.file = editor.buffer.file.originalFile;
+              editor.buffer.load({internal: true});
+            } else {
+              const {lenientToJS} = require('./transpile');
+              transpileEditor(editor, lenientToJS, error => {
+                this.onWriteError("Couldn't convert from Lenient", error);
+              });
+            }
             editor.buffer.isLenient = false;
           }
+          lastGrammar = grammar;
         });
         this.subscriptions.add(grammarSubscription);
         editor.onDidDestroy(() => {
@@ -40,8 +59,8 @@ export default {
     );
   },
 
-  onWriteError(error) {
-    atom.notifications.addError("Couldn't save Lenient file", {
+  onWriteError(message, error) {
+    atom.notifications.addError(message, {
       detail: error.toString(),
       stack: error.stack,
       dismissable: true,
@@ -51,6 +70,16 @@ export default {
   deactivate() {
     this.subscriptions.dispose();
   },
+};
+
+const transpileEditor = (editor, fn, onError) => {
+  try {
+    editor.setText(fn(editor.getText()));
+  } catch (error) {
+    onError(error);
+    // Important, we don't want the syntax setting to succeed
+    throw error;
+  }
 };
 
 const getMappedFile = (file, onError) => {
@@ -96,6 +125,7 @@ const writeThroughTo = (file, fn, onError) =>
         file.createWriteStream().write(transformed, callback);
       } catch (error) {
         onError(error);
+        // Make sure Atom knows the saving failed
         callback(error);
       }
     },
