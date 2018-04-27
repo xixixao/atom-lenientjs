@@ -1,6 +1,6 @@
 'use babel';
 
-const prettier = require('./dependencies/prettier');
+const prettier = require('../dependencies/prettier');
 
 const defaultBabylonOptions = {
   sourceType: 'module',
