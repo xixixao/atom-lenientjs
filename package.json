@@ -1,0 +1,30 @@
+{
+  "name": "lenientjs",
+  "main": "index.js",
+  "version": "0.0.1",
+  "description": "Atom integration for Lenient JS syntax",
+  "homepage": "https://xixixao.github.com/lenientjs",
+  "keywords": [],
+  "activationHooks": [
+    "language-coffee-script:grammar-used"
+  ],
+  "repository": "https://github.com/xixixao/atom-lenientjs",
+  "license": "MIT",
+  "engines": {
+    "atom": ">=1.0.0 <2.0.0"
+  },
+  "scripts": {
+    "build": "node scripts/build-dependencies.js"
+  },
+  "dependencies": {},
+  "prettier": {
+    "bracketSpacing": false,
+    "jsxBracketSameLine": true,
+    "singleQuote": true,
+    "trailingComma": "all"
+  },
+  "devDependencies": {
+    "chalk": "^2.4.0",
+    "shelljs": "^0.8.1"
+  }
+}
