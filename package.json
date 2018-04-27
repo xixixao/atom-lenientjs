@@ -1,7 +1,7 @@
 {
   "name": "lenientjs",
   "main": "src/index.js",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Atom integration for Lenient JS syntax",
   "homepage": "https://xixixao.github.com/lenientjs",
   "keywords": [
@@ -15,7 +15,9 @@
     "syntax",
     "whitespace"
   ],
-  "activationHooks": ["language-coffee-script:grammar-used"],
+  "activationHooks": [
+    "language-coffee-script:grammar-used"
+  ],
   "repository": "https://github.com/xixixao/atom-lenientjs",
   "license": "MIT",
   "engines": {
