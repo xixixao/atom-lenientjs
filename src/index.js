@@ -18,6 +18,7 @@ export default {
         const grammarSubscription = editor.observeGrammar(grammar => {
           const {scopeName} = grammar;
           const hasBackingFile = !!editor.getPath();
+          const hasUnsavedChanges = editor.isModified();
           if (
             !editor.buffer.isLenient &&
             ((editor.getPath() || '').endsWith('.js') ||
@@ -28,8 +29,11 @@ export default {
               editor.buffer.file = getMappedFile(editor.buffer.file, error => {
                 this.onWriteError("Couldn't save Lenient file", error);
               });
-              editor.buffer.load({internal: true});
-            } else {
+              if (!hasUnsavedChanges) {
+                editor.buffer.load({internal: true});
+              }
+            }
+            if (hasUnsavedChanges) {
               const {jsToLenient} = require('./transpile');
               transpileEditor(editor, jsToLenient, error => {
                 this.onWriteError("Couldn't convert to Lenient", error);
@@ -40,8 +44,11 @@ export default {
           } else if (editor.buffer.isLenient) {
             if (hasBackingFile) {
               editor.buffer.file = editor.buffer.file.originalFile;
-              editor.buffer.load({internal: true});
-            } else {
+              if (!hasUnsavedChanges) {
+                editor.buffer.load({internal: true});
+              }
+            }
+            if (hasUnsavedChanges) {
               const {lenientToJS} = require('./transpile');
               transpileEditor(editor, lenientToJS, error => {
                 this.onWriteError("Couldn't convert from Lenient", error);
