@@ -8,53 +8,24 @@ const WriteStream = nodeStream.Writable;
 
 export default {
   subscriptions: null,
+  lenientEditors: [],
 
   activate(state) {
     this.subscriptions = new CompositeDisposable();
-
     this.subscriptions.add(
       atom.workspace.observeTextEditors(editor => {
         let lastGrammar = null;
         const grammarSubscription = editor.observeGrammar(grammar => {
           const {scopeName} = grammar;
-          const hasBackingFile = !!editor.getPath();
-          const hasUnsavedChanges = editor.isModified();
           if (
             !editor.buffer.isLenient &&
             ((editor.getPath() || '').endsWith('.js') ||
               ((lastGrammar || {}).scopeName || '').startsWith('source.js')) &&
             scopeName === 'source.coffee'
           ) {
-            if (hasBackingFile) {
-              editor.buffer.file = getMappedFile(editor.buffer.file, error => {
-                this.onWriteError("Couldn't save Lenient file", error);
-              });
-              if (!hasUnsavedChanges) {
-                editor.buffer.load({internal: true});
-              }
-            }
-            if (hasUnsavedChanges) {
-              const {jsToLenient} = require('./transpile');
-              transpileEditor(editor, jsToLenient, error => {
-                this.onWriteError("Couldn't convert to Lenient", error);
-                editor.setGrammar(lastGrammar);
-              });
-            }
-            editor.buffer.isLenient = true;
+            this.enableLenient(editor, lastGrammar);
           } else if (editor.buffer.isLenient) {
-            if (hasBackingFile) {
-              editor.buffer.file = editor.buffer.file.originalFile;
-              if (!hasUnsavedChanges) {
-                editor.buffer.load({internal: true});
-              }
-            }
-            if (hasUnsavedChanges) {
-              const {lenientToJS} = require('./transpile');
-              transpileEditor(editor, lenientToJS, error => {
-                this.onWriteError("Couldn't convert from Lenient", error);
-              });
-            }
-            editor.buffer.isLenient = false;
+            this.disableLenient(editor);
           }
           lastGrammar = grammar;
         });
@@ -64,6 +35,46 @@ export default {
         });
       }),
     );
+  },
+
+  enableLenient(editor, lastGrammar) {
+    const hasBackingFile = !!editor.getPath();
+    const hasUnsavedChanges = editor.isModified();
+    if (hasBackingFile) {
+      editor.buffer.file = getMappedFile(editor.buffer.file, error => {
+        this.onWriteError("Couldn't save Lenient file", error);
+      });
+      if (!hasUnsavedChanges) {
+        editor.buffer.load({internal: true});
+      }
+    }
+    if (hasUnsavedChanges) {
+      const {jsToLenient} = require('./transpile');
+      transpileEditor(editor, jsToLenient, error => {
+        this.onWriteError("Couldn't convert to Lenient", error);
+        editor.setGrammar(lastGrammar);
+      });
+    }
+    this.lenientEditors.push(editor);
+    editor.buffer.isLenient = true;
+  },
+
+  disableLenient(editor) {
+    const hasBackingFile = !!editor.getPath();
+    const hasUnsavedChanges = editor.isModified();
+    if (hasBackingFile) {
+      editor.buffer.file = editor.buffer.file.originalFile;
+      if (!hasUnsavedChanges) {
+        editor.buffer.load({internal: true});
+      }
+    }
+    if (hasUnsavedChanges) {
+      const {lenientToJS} = require('./transpile');
+      transpileEditor(editor, lenientToJS, error => {
+        this.onWriteError("Couldn't convert from Lenient", error);
+      });
+    }
+    editor.buffer.isLenient = false;
   },
 
   onWriteError(message, error) {
@@ -76,6 +87,18 @@ export default {
 
   deactivate() {
     this.subscriptions.dispose();
+    this.lenientEditors.forEach(editor => {
+      if (editor.buffer.isLenient) {
+        try {
+          this.disableLenient(editor);
+        } catch (error) {
+          // don't propagate error to make sure deactivation succeeds
+          // and make sure this editor works when the package is reactivated
+          editor.buffer.isLenient = false;
+        }
+      }
+    });
+    this.lenientEditors = [];
   },
 };
 
