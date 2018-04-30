@@ -11875,7 +11875,7 @@ function printPathNoParens(path$$1, options, print, args) {
         if (
           utilShared.isNextLineEmpty(options.originalText, prop.node, options)
         ) {
-          separatorParts.push(hardline);
+          parts.push(options.lenient ? singleline : hardline);
         }
         return result;
       });
