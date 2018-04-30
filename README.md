@@ -2,7 +2,11 @@
 
 Atom package which enables Lenient syntax for JavaScript.
 
-After installing this package, open a JS file and run `Set Syntax: CoffeeScript` from command palette (Cmd+Shift+P on macOS).
+After installing this package, open a JS file and run `Set Syntax: Lenient JS` from command palette (Cmd+Shift+P on macOS), in case the syntax wasn't selected automatically.
+
+When enabled, the code will be presented in Lenient syntax, but saved as pretty-printed standard JavaScript.
+
+TODO: Support local Prettier settings
 
 ## Development
 

@@ -21,7 +21,7 @@ export default {
             !editor.buffer.isLenient &&
             ((editor.getPath() || '').endsWith('.js') ||
               ((lastGrammar || {}).scopeName || '').startsWith('source.js')) &&
-            scopeName === 'source.coffee'
+            scopeName === 'source.js.lenient'
           ) {
             this.enableLenient(editor, lastGrammar);
           } else if (editor.buffer.isLenient) {
