@@ -15,9 +15,6 @@
     "syntax",
     "whitespace"
   ],
-  "activationHooks": [
-    "language-coffee-script:grammar-used"
-  ],
   "repository": "https://github.com/xixixao/atom-lenientjs",
   "license": "MIT",
   "engines": {
