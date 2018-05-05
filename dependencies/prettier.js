@@ -7116,6 +7116,7 @@ function printDocToString$1(doc, options) {
   const out = [];
   let shouldRemeasure = false;
   let lineSuffix = [];
+  let isPrevLineSingle = false;
 
   while (cmds.length !== 0) {
     const x = cmds.pop();
@@ -7372,7 +7373,11 @@ function printDocToString$1(doc, options) {
                   while (
                     (out.length > 0 &&
                       out[out.length - 1].match(/^[^\S\n]*$/)) ||
-                    (doc.single && out[out.length - 1].match(/^\n\s*$/))
+                    (doc.single &&
+                      out[out.length - 1].match(/^\n\s*$/) &&
+                      (isPrevLineSingle ||
+                        (out.length > 1 &&
+                          out[out.length - 2].match(/\n\s*$/))))
                   ) {
                     out.pop();
                   }
@@ -7389,6 +7394,9 @@ function printDocToString$1(doc, options) {
                     );
                   }
                 }
+                // This allows singleline to keep a blank line in case
+                // previous line is not a singleline
+                isPrevLineSingle = doc.single;
 
                 out.push(newLine + ind.value);
                 pos = ind.length;
@@ -13794,13 +13802,13 @@ function printStatementSequence(path$$1, options, print) {
       utilShared.isNextLineEmpty(text, stmt, options) &&
       !isLastStatement(stmtPath)
     ) {
-      parts.push(options.lenient ? singleline : hardline);
+      parts.push(hardline);
     }
 
     printed.push(concat(parts));
   });
 
-  return join(hardline, printed);
+  return join(options.lenient ? singleline : hardline, printed);
 }
 
 function isEmptyStatement(node, parent) {
