@@ -10764,12 +10764,12 @@ function lineComma(options) {
   return !options.lenient ? "," : ifBreak("", ",");
 }
 
-function openBrace(options) {
-  return !options.lenient ? "{" : "";
+function openBrace(options, force) {
+  return !options.lenient || force ? "{" : "";
 }
 
-function closeBrace(options) {
-  return !options.lenient ? concat([hardline, "}"]) : singleHardLine;
+function closeBrace(options, force) {
+  return !options.lenient || force ? concat([hardline, "}"]) : singleHardLine;
 }
 
 function closeSoftBrace(options, rightBrace) {
@@ -10798,6 +10798,12 @@ function blockArgument(options, body, argument) {
     group(concat([usesParens ? indented : indent(indented), newLine])),
     closeParen(options, body)
   ]);
+}
+
+function spaceAfterBreak(stmt, options) {
+  return !options.lenient
+    ? " "
+    : stmt && stmt.body && stmt.body.length === 0 ? singleHardLine : "";
 }
 
 function shouldPrintParens(options, body) {
@@ -11252,7 +11258,7 @@ function printPathNoParens(path$$1, options, print, args) {
     case "AssignmentPattern":
       return concat([
         path$$1.call(print, "left"),
-        " = ",
+        options.lenient ? " := " : " = ",
         path$$1.call(print, "right")
       ]);
     case "TSTypeAssertionExpression":
@@ -11657,7 +11663,8 @@ function printPathNoParens(path$$1, options, print, args) {
           (options.lenient &&
             (parent.type === "TryStatement" ||
               parent.type === "CatchClause" ||
-              parent.type === "IfStatement")))
+              parent.type === "IfStatement" ||
+              parent.type === "DeclareModule")))
       ) {
         if (
           options.lenient &&
@@ -11666,10 +11673,15 @@ function printPathNoParens(path$$1, options, print, args) {
         ) {
           return "{;}";
         }
-        return concat(["{}", options.lenient ? singleHardLine : ""]);
+        return "{}";
       }
 
-      parts.push(openBrace(options));
+      const needsBraces =
+        !options.lenient ||
+        (parent.type === "Program" ||
+          parent.type === "BlockStatement" ||
+          parent.type === "SwitchCase");
+      parts.push(openBrace(options, needsBraces));
 
       // Babel 6
       if (hasDirectives) {
@@ -11692,7 +11704,7 @@ function printPathNoParens(path$$1, options, print, args) {
       }
 
       parts.push(comments.printDanglingComments(path$$1, options));
-      parts.push(closeBrace(options));
+      parts.push(closeBrace(options, needsBraces));
 
       return concat(parts);
     }
@@ -11727,6 +11739,8 @@ function printPathNoParens(path$$1, options, print, args) {
         } else {
           parts.push(" ", path$$1.call(print, "argument"));
         }
+      } else if (options.lenient) {
+        parts.push(";");
       }
 
       if (hasDanglingComments(n)) {
@@ -12255,7 +12269,7 @@ function printPathNoParens(path$$1, options, print, args) {
 
       if (n.alternate) {
         if (n.consequent.type === "BlockStatement") {
-          parts.push(options.lenient ? "else" : " else");
+          parts.push(spaceAfterBreak(n.consequent, options), "else");
         } else {
           parts.push(hardline, "else");
         }
@@ -12372,7 +12386,7 @@ function printPathNoParens(path$$1, options, print, args) {
       parts = [doBody];
 
       if (n.body.type === "BlockStatement") {
-        parts.push(" ");
+        parts.push(options.lenient ? "" : " ");
       } else {
         parts.push(hardline);
       }
@@ -12417,19 +12431,33 @@ function printPathNoParens(path$$1, options, print, args) {
         path$$1.call(print, "body")
       ]);
     case "TryStatement":
-      const space = options.lenient ? "" : " ";
       return concat([
         "try ",
         path$$1.call(print, "block"),
-        n.handler ? concat([space, path$$1.call(print, "handler")]) : "",
+        n.handler
+          ? concat([
+              spaceAfterBreak(n.block, options),
+              path$$1.call(print, "handler")
+            ])
+          : "",
         n.finalizer
-          ? concat([space, "finally ", path$$1.call(print, "finalizer")])
+          ? concat([
+              spaceAfterBreak(
+                (n.handler && n.handler.body) || n.block,
+                options
+              ),
+              "finally ",
+              path$$1.call(print, "finalizer")
+            ])
           : ""
       ]);
     case "CatchClause":
       return concat([
-        "catch ",
-        n.param ? concat(["(", path$$1.call(print, "param"), ") "]) : "",
+        "catch",
+        n.param
+          ? blockArgument(options, n.body, path$$1.call(print, "param"))
+          : "",
+        " ",
         path$$1.call(print, "body")
       ]);
     case "ThrowStatement":
@@ -12443,7 +12471,7 @@ function printPathNoParens(path$$1, options, print, args) {
             blockArgument(options, false, path$$1.call(print, "discriminant"))
           ])
         ),
-        " ", // TODO: get rid of this space same as for if statements
+        " ",
         openBrace(options),
         n.cases.length > 0
           ? indent(
@@ -12468,7 +12496,7 @@ function printPathNoParens(path$$1, options, print, args) {
                 )
               ])
             )
-          : "",
+          : options.lenient ? "{}" : "",
         closeBrace(options)
       ]);
     case "SwitchCase": {
