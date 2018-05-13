@@ -5487,9 +5487,57 @@ var dist = function cosmiconfig(
   return createExplorer(options);
 };
 
+var findParentDir$1 = createCommonjsModule(function (module, exports) {
+'use strict';
+
+var exists     = fs.exists || path.exists
+  , existsSync = fs.existsSync || path.existsSync;
+
+function splitPath(path$$2) {
+  var parts = path$$2.split(/(\/|\\)/);
+  if (!parts.length) return parts;
+
+  // when path starts with a slash, the first part is empty string
+  return !parts[0].length ? parts.slice(1) : parts;
+}
+
+exports = module.exports = function (currentFullPath, clue, cb) {
+
+  function testDir(parts) {
+    if (parts.length === 0) return cb(null, null);
+
+    var p = parts.join('');
+
+    exists(path.join(p, clue), function (itdoes) {
+      if (itdoes) return cb(null, p);
+      testDir(parts.slice(0, -1));
+    });
+  }
+
+  testDir(splitPath(currentFullPath));
+};
+
+exports.sync = function (currentFullPath, clue) {
+
+  function testDir(parts) {
+    if (parts.length === 0) return null;
+
+    var p = parts.join('');
+
+    var itdoes = existsSync(path.join(p, clue));
+    return itdoes ? p : testDir(parts.slice(0, -1));
+  }
+
+  return testDir(splitPath(currentFullPath));
+};
+});
+
+const findParentDir = findParentDir$1.sync;
+
 var thirdParty = {
   getStream: getStream_1,
-  cosmiconfig: dist
+  cosmiconfig: dist,
+  findParentDir
 };
 
 module.exports = thirdParty;

@@ -6,6 +6,8 @@ After installing this package, open a JS file and run `Set Syntax: Lenient JS` f
 
 When enabled, the code will be presented in Lenient syntax, but saved as pretty-printed standard JavaScript.
 
+If you want to use Lenient syntax by default, disable Babel or any other package you're currently using for syntax highlighting JavaScript.
+
 TODO: Support local Prettier settings
 
 ## Development
