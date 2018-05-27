@@ -6,9 +6,20 @@ After installing this package, open a JS file and run `Set Syntax: Lenient JS` f
 
 When enabled, the code will be presented in Lenient syntax, but saved as pretty-printed standard JavaScript.
 
-If you want to use Lenient syntax by default, disable Babel or any other package you're currently using for syntax highlighting JavaScript.
+If you want to use Lenient syntax by default, open Atom config (on OS X from Atom menubar menu) and add `'source.js.lenient': ['js']` to `customFileTypes`, like this:
+
+```
+'*':
+  core:
+    customFileTypes:
+      'source.js.lenient': [
+        'js'
+      ]
+```
 
 TODO: Support local Prettier settings
+TODO: Git integration shows changes between Lenient and underlying JS
+TODO: Limit size of file for which Lenient kicks in
 
 ## Development
 
