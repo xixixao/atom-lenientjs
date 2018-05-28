@@ -3098,475 +3098,6 @@ var support = {
   getSupportInfo: getSupportInfo$2
 };
 
-/* eslint-disable no-nested-ternary */
-var arr = [];
-var charCodeCache = [];
-
-var leven = function (a, b) {
-	if (a === b) {
-		return 0;
-	}
-
-	var swap = a;
-
-	// Swapping the strings if `a` is longer than `b` so we know which one is the
-	// shortest & which one is the longest
-	if (a.length > b.length) {
-		a = b;
-		b = swap;
-	}
-
-	var aLen = a.length;
-	var bLen = b.length;
-
-	if (aLen === 0) {
-		return bLen;
-	}
-
-	if (bLen === 0) {
-		return aLen;
-	}
-
-	// Performing suffix trimming:
-	// We can linearly drop suffix common to both strings since they
-	// don't increase distance at all
-	// Note: `~-` is the bitwise way to perform a `- 1` operation
-	while (aLen > 0 && (a.charCodeAt(~-aLen) === b.charCodeAt(~-bLen))) {
-		aLen--;
-		bLen--;
-	}
-
-	if (aLen === 0) {
-		return bLen;
-	}
-
-	// Performing prefix trimming
-	// We can linearly drop prefix common to both strings since they
-	// don't increase distance at all
-	var start = 0;
-
-	while (start < aLen && (a.charCodeAt(start) === b.charCodeAt(start))) {
-		start++;
-	}
-
-	aLen -= start;
-	bLen -= start;
-
-	if (aLen === 0) {
-		return bLen;
-	}
-
-	var bCharCode;
-	var ret;
-	var tmp;
-	var tmp2;
-	var i = 0;
-	var j = 0;
-
-	while (i < aLen) {
-		charCodeCache[start + i] = a.charCodeAt(start + i);
-		arr[i] = ++i;
-	}
-
-	while (j < bLen) {
-		bCharCode = b.charCodeAt(start + j);
-		tmp = j++;
-		ret = j;
-
-		for (i = 0; i < aLen; i++) {
-			tmp2 = bCharCode === charCodeCache[start + i] ? tmp : tmp + 1;
-			tmp = arr[i];
-			ret = arr[i] = tmp > ret ? tmp2 > ret ? ret + 1 : tmp2 : tmp2 > tmp ? tmp + 1 : tmp2;
-		}
-	}
-
-	return ret;
-};
-
-function apiDescriptor(name, value) {
-  return arguments.length === 1
-    ? JSON.stringify(name)
-    : `\`{ ${apiDescriptor(name)}: ${JSON.stringify(value)} }\``;
-}
-
-function cliDescriptor(name, value) {
-  return value === false
-    ? `\`--no-${name}\``
-    : value === true || arguments.length === 1
-      ? `\`--${name}\``
-      : value === ""
-        ? `\`--${name}\` without an argument`
-        : `\`--${name}=${value}\``;
-}
-
-var optionsDescriptor = {
-  apiDescriptor,
-  cliDescriptor
-};
-
-function validateOption(value, optionInfo, opts) {
-  opts = opts || {};
-  const descriptor = opts.descriptor || optionsDescriptor.apiDescriptor;
-
-  if (
-    typeof optionInfo.exception === "function" &&
-    optionInfo.exception(value)
-  ) {
-    return;
-  }
-
-  try {
-    validateOptionType(value, optionInfo);
-  } catch (error) {
-    throw new Error(
-      `Invalid \`${descriptor(optionInfo.name)}\` value. ${
-        error.message
-      }, but received \`${JSON.stringify(value)}\`.`
-    );
-  }
-}
-
-function validateOptionType(value, optionInfo) {
-  if (optionInfo.array) {
-    if (!Array.isArray(value)) {
-      throw new Error(`Expected an array`);
-    }
-    value.forEach(v =>
-      validateOptionType(v, Object.assign({}, optionInfo, { array: false }))
-    );
-  } else {
-    switch (optionInfo.type) {
-      case "int":
-        validateIntOption(value);
-        break;
-      case "boolean":
-        validateBooleanOption(value);
-        break;
-      case "choice":
-        validateChoiceOption(value, optionInfo.choices);
-        break;
-    }
-  }
-}
-
-function validateBooleanOption(value) {
-  if (typeof value !== "boolean") {
-    throw new Error(`Expected a boolean`);
-  }
-}
-
-function validateIntOption(value) {
-  if (
-    !(
-      typeof value === "number" &&
-      Math.floor(value) === value &&
-      value >= 0 &&
-      value !== Infinity
-    )
-  ) {
-    throw new Error(`Expected an integer`);
-  }
-}
-
-function validateChoiceOption(value, choiceInfos) {
-  if (!choiceInfos.some(choiceInfo => choiceInfo.value === value)) {
-    const choices = choiceInfos
-      .filter(choiceInfo => !choiceInfo.deprecated)
-      .map(choiceInfo => JSON.stringify(choiceInfo.value))
-      .sort();
-    const head = choices.slice(0, -2);
-    const tail = choices.slice(-2);
-    throw new Error(`Expected ${head.concat(tail.join(" or ")).join(", ")}`);
-  }
-}
-
-var optionsValidator = { validateOption };
-
-function normalizeOptions$1(options, optionInfos, opts) {
-  opts = opts || {};
-  const logger =
-    opts.logger === false
-      ? { warn() {} }
-      : opts.logger !== undefined
-        ? opts.logger
-        : console;
-  const descriptor = opts.descriptor || optionsDescriptor.apiDescriptor;
-  const passThrough = opts.passThrough || [];
-
-  const optionInfoMap = optionInfos.reduce(
-    (reduced, optionInfo) =>
-      Object.assign(reduced, { [optionInfo.name]: optionInfo }),
-    {}
-  );
-  const normalizedOptions = Object.keys(options).reduce((newOptions, key) => {
-    const optionInfo = optionInfoMap[key];
-
-    let optionName = key;
-    let optionValue = options[key];
-
-    if (!optionInfo) {
-      if (passThrough === true || passThrough.indexOf(optionName) !== -1) {
-        newOptions[optionName] = optionValue;
-      } else {
-        logger.warn(
-          createUnknownOptionMessage(
-            optionName,
-            optionValue,
-            optionInfos,
-            descriptor
-          )
-        );
-      }
-      return newOptions;
-    }
-
-    if (!optionInfo.deprecated) {
-      optionValue = normalizeOption(optionValue, optionInfo);
-    } else if (typeof optionInfo.redirect === "string") {
-      logger.warn(createRedirectOptionMessage(optionInfo, descriptor));
-      optionName = optionInfo.redirect;
-    } else if (optionValue) {
-      logger.warn(createRedirectOptionMessage(optionInfo, descriptor));
-      optionValue = optionInfo.redirect.value;
-      optionName = optionInfo.redirect.option;
-    }
-
-    if (optionInfo.choices) {
-      const choiceInfo = optionInfo.choices.find(
-        choice => choice.value === optionValue
-      );
-      if (choiceInfo && choiceInfo.deprecated) {
-        logger.warn(
-          createRedirectChoiceMessage(optionInfo, choiceInfo, descriptor)
-        );
-        optionValue = choiceInfo.redirect;
-      }
-    }
-
-    if (optionInfo.array && !Array.isArray(optionValue)) {
-      optionValue = [optionValue];
-    }
-
-    if (optionValue !== optionInfo.default) {
-      optionsValidator.validateOption(optionValue, optionInfoMap[optionName], {
-        descriptor
-      });
-    }
-
-    newOptions[optionName] = optionValue;
-    return newOptions;
-  }, {});
-
-  return normalizedOptions;
-}
-
-function normalizeOption(option, optionInfo) {
-  return optionInfo.type === "int" ? Number(option) : option;
-}
-
-function createUnknownOptionMessage(key, value, optionInfos, descriptor) {
-  const messages = [`Ignored unknown option ${descriptor(key, value)}.`];
-
-  const suggestedOptionInfo = optionInfos.find(
-    optionInfo => leven(optionInfo.name, key) < 3
-  );
-  if (suggestedOptionInfo) {
-    messages.push(`Did you mean ${JSON.stringify(suggestedOptionInfo.name)}?`);
-  }
-
-  return messages.join(" ");
-}
-
-function createRedirectOptionMessage(optionInfo, descriptor) {
-  return `${descriptor(
-    optionInfo.name
-  )} is deprecated. Prettier now treats it as ${
-    typeof optionInfo.redirect === "string"
-      ? descriptor(optionInfo.redirect)
-      : descriptor(optionInfo.redirect.option, optionInfo.redirect.value)
-  }.`;
-}
-
-function createRedirectChoiceMessage(optionInfo, choiceInfo, descriptor) {
-  return `${descriptor(
-    optionInfo.name,
-    choiceInfo.value
-  )} is deprecated. Prettier now treats it as ${descriptor(
-    optionInfo.name,
-    choiceInfo.redirect
-  )}.`;
-}
-
-function normalizeApiOptions(options, optionInfos, opts) {
-  return normalizeOptions$1(
-    options,
-    optionInfos,
-    Object.assign({ descriptor: optionsDescriptor.apiDescriptor }, opts)
-  );
-}
-
-function normalizeCliOptions(options, optionInfos, opts) {
-  const args = options["_"] || [];
-
-  const newOptions = normalizeOptions$1(
-    Object.keys(options).reduce(
-      (reduced, key) =>
-        Object.assign(
-          reduced,
-          key.length === 1 // omit alias
-            ? null
-            : { [key]: options[key] }
-        ),
-      {}
-    ),
-    optionInfos,
-    Object.assign({ descriptor: optionsDescriptor.cliDescriptor }, opts)
-  );
-  newOptions["_"] = args;
-
-  return newOptions;
-}
-
-var optionsNormalizer = {
-  normalizeApiOptions,
-  normalizeCliOptions
-};
-
-class ConfigError$1 extends Error {}
-class DebugError extends Error {}
-
-var errors = {
-  ConfigError: ConfigError$1,
-  DebugError
-};
-
-function concat$2(parts) {
-  return { type: "concat", parts };
-}
-
-function indent$2(contents) {
-  return { type: "indent", contents };
-}
-
-function align$1(n, contents) {
-  return { type: "align", contents, n };
-}
-
-function group$1(contents, opts) {
-  opts = opts || {};
-
-  return {
-    type: "group",
-    contents: contents,
-    break: !!opts.shouldBreak,
-    expandedStates: opts.expandedStates
-  };
-}
-
-function dedentToRoot(contents) {
-  return align$1(-Infinity, contents);
-}
-
-function markAsRoot(contents) {
-  return align$1({ type: "root" }, contents);
-}
-
-function dedent$2(contents) {
-  return align$1(-1, contents);
-}
-
-function conditionalGroup$1(states, opts) {
-  return group$1(
-    states[0],
-    Object.assign(opts || {}, { expandedStates: states })
-  );
-}
-
-function fill$1(parts) {
-  return { type: "fill", parts };
-}
-
-function ifBreak$1(breakContents, flatContents) {
-  return { type: "if-break", breakContents, flatContents };
-}
-
-function lineSuffix$1(contents) {
-  return { type: "line-suffix", contents };
-}
-
-const lineSuffixBoundary$1 = { type: "line-suffix-boundary" };
-const breakParent$2 = { type: "break-parent" };
-const line$3 = { type: "line" };
-const softline$1 = { type: "line", soft: true };
-const hardline$2 = concat$2([{ type: "line", hard: true }, breakParent$2]);
-const singleLine$1 = { type: "line", single: true };
-const singleSoftLine$1 = { type: "line", soft: true, single: true };
-const singleHardLine$2 = concat$2([
-  { type: "line", hard: true, single: true },
-  breakParent$2
-]);
-const literalline$1 = concat$2([
-  { type: "line", hard: true, literal: true },
-  breakParent$2
-]);
-const cursor$1 = { type: "cursor", placeholder: Symbol("cursor") };
-
-function join$2(sep, arr) {
-  const res = [];
-
-  for (let i = 0; i < arr.length; i++) {
-    if (i !== 0) {
-      res.push(sep);
-    }
-
-    res.push(arr[i]);
-  }
-
-  return concat$2(res);
-}
-
-function addAlignmentToDoc$1(doc, size, tabWidth) {
-  let aligned = doc;
-  if (size > 0) {
-    // Use indent to add tabs for all the levels of tabs we need
-    for (let i = 0; i < Math.floor(size / tabWidth); ++i) {
-      aligned = indent$2(aligned);
-    }
-    // Use align for all the spaces that are needed
-    aligned = align$1(size % tabWidth, aligned);
-    // size is absolute from 0 and not relative to the current
-    // indentation, so we use -Infinity to reset the indentation to 0
-    aligned = align$1(-Infinity, aligned);
-  }
-  return aligned;
-}
-
-var docBuilders$2 = {
-  concat: concat$2,
-  join: join$2,
-  line: line$3,
-  softline: softline$1,
-  hardline: hardline$2,
-  singleLine: singleLine$1,
-  singleSoftLine: singleSoftLine$1,
-  singleHardLine: singleHardLine$2,
-  literalline: literalline$1,
-  group: group$1,
-  conditionalGroup: conditionalGroup$1,
-  fill: fill$1,
-  lineSuffix: lineSuffix$1,
-  lineSuffixBoundary: lineSuffixBoundary$1,
-  cursor: cursor$1,
-  breakParent: breakParent$2,
-  ifBreak: ifBreak$1,
-  indent: indent$2,
-  align: align$1,
-  addAlignmentToDoc: addAlignmentToDoc$1,
-  markAsRoot,
-  dedentToRoot,
-  dedent: dedent$2
-};
-
 var ansiRegex = createCommonjsModule(function (module) {
 'use strict';
 
@@ -4298,12 +3829,11 @@ function printString(raw, options, isDirectiveLiteral) {
     canChangeDirectiveQuotes = true;
   }
 
-  const enclosingQuote =
-    options.parser === "json"
-      ? double.quote
-      : shouldUseAlternateQuote
-        ? alternate.quote
-        : preferred.quote;
+  const enclosingQuote = isParser$1(options, "json")
+    ? double.quote
+    : shouldUseAlternateQuote
+      ? alternate.quote
+      : preferred.quote;
 
   // Directives are exact code unit sequences, which means that you can't
   // change the escape sequences they use.
@@ -4324,11 +3854,15 @@ function printString(raw, options, isDirectiveLiteral) {
     rawContent,
     enclosingQuote,
     !(
-      options.parser === "css" ||
-      options.parser === "less" ||
-      options.parser === "scss"
+      isParser$1(options, "css") ||
+      isParser$1(options, "less") ||
+      isParser$1(options, "scss")
     )
   );
+}
+
+function isParser$1(options, name) {
+  return options.parser === name || options.parser.printer === name;
 }
 
 function makeString(rawContent, enclosingQuote, unescapeUnnecessaryEscapes) {
@@ -4550,19 +4084,19 @@ function addCommentHelper(node, comment) {
   }
 }
 
-function addLeadingComment$1(node, comment) {
+function addLeadingComment(node, comment) {
   comment.leading = true;
   comment.trailing = false;
   addCommentHelper(node, comment);
 }
 
-function addDanglingComment$1(node, comment) {
+function addDanglingComment(node, comment) {
   comment.leading = false;
   comment.trailing = false;
   addCommentHelper(node, comment);
 }
 
-function addTrailingComment$1(node, comment) {
+function addTrailingComment(node, comment) {
   comment.leading = false;
   comment.trailing = true;
   addCommentHelper(node, comment);
@@ -4599,13 +4133,483 @@ var util$1 = {
   getIndentSize,
   printString,
   printNumber,
+  isParser: isParser$1,
   hasIgnoreComment,
   hasNodeIgnoreComment,
   lineColumnToIndex,
   makeString,
-  addLeadingComment: addLeadingComment$1,
-  addDanglingComment: addDanglingComment$1,
-  addTrailingComment: addTrailingComment$1
+  addLeadingComment,
+  addDanglingComment,
+  addTrailingComment
+};
+
+/* eslint-disable no-nested-ternary */
+var arr = [];
+var charCodeCache = [];
+
+var leven = function (a, b) {
+	if (a === b) {
+		return 0;
+	}
+
+	var swap = a;
+
+	// Swapping the strings if `a` is longer than `b` so we know which one is the
+	// shortest & which one is the longest
+	if (a.length > b.length) {
+		a = b;
+		b = swap;
+	}
+
+	var aLen = a.length;
+	var bLen = b.length;
+
+	if (aLen === 0) {
+		return bLen;
+	}
+
+	if (bLen === 0) {
+		return aLen;
+	}
+
+	// Performing suffix trimming:
+	// We can linearly drop suffix common to both strings since they
+	// don't increase distance at all
+	// Note: `~-` is the bitwise way to perform a `- 1` operation
+	while (aLen > 0 && (a.charCodeAt(~-aLen) === b.charCodeAt(~-bLen))) {
+		aLen--;
+		bLen--;
+	}
+
+	if (aLen === 0) {
+		return bLen;
+	}
+
+	// Performing prefix trimming
+	// We can linearly drop prefix common to both strings since they
+	// don't increase distance at all
+	var start = 0;
+
+	while (start < aLen && (a.charCodeAt(start) === b.charCodeAt(start))) {
+		start++;
+	}
+
+	aLen -= start;
+	bLen -= start;
+
+	if (aLen === 0) {
+		return bLen;
+	}
+
+	var bCharCode;
+	var ret;
+	var tmp;
+	var tmp2;
+	var i = 0;
+	var j = 0;
+
+	while (i < aLen) {
+		charCodeCache[start + i] = a.charCodeAt(start + i);
+		arr[i] = ++i;
+	}
+
+	while (j < bLen) {
+		bCharCode = b.charCodeAt(start + j);
+		tmp = j++;
+		ret = j;
+
+		for (i = 0; i < aLen; i++) {
+			tmp2 = bCharCode === charCodeCache[start + i] ? tmp : tmp + 1;
+			tmp = arr[i];
+			ret = arr[i] = tmp > ret ? tmp2 > ret ? ret + 1 : tmp2 : tmp2 > tmp ? tmp + 1 : tmp2;
+		}
+	}
+
+	return ret;
+};
+
+function apiDescriptor(name, value) {
+  return arguments.length === 1
+    ? JSON.stringify(name)
+    : `\`{ ${apiDescriptor(name)}: ${JSON.stringify(value)} }\``;
+}
+
+function cliDescriptor(name, value) {
+  return value === false
+    ? `\`--no-${name}\``
+    : value === true || arguments.length === 1
+      ? `\`--${name}\``
+      : value === ""
+        ? `\`--${name}\` without an argument`
+        : `\`--${name}=${value}\``;
+}
+
+var optionsDescriptor = {
+  apiDescriptor,
+  cliDescriptor
+};
+
+function validateOption(value, optionInfo, opts) {
+  opts = opts || {};
+  const descriptor = opts.descriptor || optionsDescriptor.apiDescriptor;
+
+  if (
+    typeof optionInfo.exception === "function" &&
+    optionInfo.exception(value)
+  ) {
+    return;
+  }
+
+  try {
+    validateOptionType(value, optionInfo);
+  } catch (error) {
+    throw new Error(
+      `Invalid \`${descriptor(optionInfo.name)}\` value. ${
+        error.message
+      }, but received \`${JSON.stringify(value)}\`.`
+    );
+  }
+}
+
+function validateOptionType(value, optionInfo) {
+  if (optionInfo.array) {
+    if (!Array.isArray(value)) {
+      throw new Error(`Expected an array`);
+    }
+    value.forEach(v =>
+      validateOptionType(v, Object.assign({}, optionInfo, { array: false }))
+    );
+  } else {
+    switch (optionInfo.type) {
+      case "int":
+        validateIntOption(value);
+        break;
+      case "boolean":
+        validateBooleanOption(value);
+        break;
+      case "choice":
+        validateChoiceOption(value, optionInfo.choices);
+        break;
+    }
+  }
+}
+
+function validateBooleanOption(value) {
+  if (typeof value !== "boolean") {
+    throw new Error(`Expected a boolean`);
+  }
+}
+
+function validateIntOption(value) {
+  if (
+    !(
+      typeof value === "number" &&
+      Math.floor(value) === value &&
+      value >= 0 &&
+      value !== Infinity
+    )
+  ) {
+    throw new Error(`Expected an integer`);
+  }
+}
+
+function validateChoiceOption(value, choiceInfos) {
+  if (!choiceInfos.some(choiceInfo => choiceInfo.value === value)) {
+    const choices = choiceInfos
+      .filter(choiceInfo => !choiceInfo.deprecated)
+      .map(choiceInfo => JSON.stringify(choiceInfo.value))
+      .sort();
+    const head = choices.slice(0, -2);
+    const tail = choices.slice(-2);
+    throw new Error(`Expected ${head.concat(tail.join(" or ")).join(", ")}`);
+  }
+}
+
+var optionsValidator = { validateOption };
+
+function normalizeOptions$1(options, optionInfos, opts) {
+  opts = opts || {};
+  const logger =
+    opts.logger === false
+      ? { warn() {} }
+      : opts.logger !== undefined
+        ? opts.logger
+        : console;
+  const descriptor = opts.descriptor || optionsDescriptor.apiDescriptor;
+  const passThrough = opts.passThrough || [];
+
+  const optionInfoMap = optionInfos.reduce(
+    (reduced, optionInfo) =>
+      Object.assign(reduced, { [optionInfo.name]: optionInfo }),
+    {}
+  );
+  const normalizedOptions = Object.keys(options).reduce((newOptions, key) => {
+    const optionInfo = optionInfoMap[key];
+
+    let optionName = key;
+    let optionValue = options[key];
+
+    if (!optionInfo) {
+      if (passThrough === true || passThrough.indexOf(optionName) !== -1) {
+        newOptions[optionName] = optionValue;
+      } else {
+        logger.warn(
+          createUnknownOptionMessage(
+            optionName,
+            optionValue,
+            optionInfos,
+            descriptor
+          )
+        );
+      }
+      return newOptions;
+    }
+
+    if (!optionInfo.deprecated) {
+      optionValue = normalizeOption(optionValue, optionInfo);
+    } else if (typeof optionInfo.redirect === "string") {
+      logger.warn(createRedirectOptionMessage(optionInfo, descriptor));
+      optionName = optionInfo.redirect;
+    } else if (optionValue) {
+      logger.warn(createRedirectOptionMessage(optionInfo, descriptor));
+      optionValue = optionInfo.redirect.value;
+      optionName = optionInfo.redirect.option;
+    }
+
+    if (optionInfo.choices) {
+      const choiceInfo = optionInfo.choices.find(
+        choice => choice.value === optionValue
+      );
+      if (choiceInfo && choiceInfo.deprecated) {
+        logger.warn(
+          createRedirectChoiceMessage(optionInfo, choiceInfo, descriptor)
+        );
+        optionValue = choiceInfo.redirect;
+      }
+    }
+
+    if (optionInfo.array && !Array.isArray(optionValue)) {
+      optionValue = [optionValue];
+    }
+
+    if (optionValue !== optionInfo.default) {
+      optionsValidator.validateOption(optionValue, optionInfoMap[optionName], {
+        descriptor
+      });
+    }
+
+    newOptions[optionName] = optionValue;
+    return newOptions;
+  }, {});
+
+  return normalizedOptions;
+}
+
+function normalizeOption(option, optionInfo) {
+  return optionInfo.type === "int" ? Number(option) : option;
+}
+
+function createUnknownOptionMessage(key, value, optionInfos, descriptor) {
+  const messages = [`Ignored unknown option ${descriptor(key, value)}.`];
+
+  const suggestedOptionInfo = optionInfos.find(
+    optionInfo => leven(optionInfo.name, key) < 3
+  );
+  if (suggestedOptionInfo) {
+    messages.push(`Did you mean ${JSON.stringify(suggestedOptionInfo.name)}?`);
+  }
+
+  return messages.join(" ");
+}
+
+function createRedirectOptionMessage(optionInfo, descriptor) {
+  return `${descriptor(
+    optionInfo.name
+  )} is deprecated. Prettier now treats it as ${
+    typeof optionInfo.redirect === "string"
+      ? descriptor(optionInfo.redirect)
+      : descriptor(optionInfo.redirect.option, optionInfo.redirect.value)
+  }.`;
+}
+
+function createRedirectChoiceMessage(optionInfo, choiceInfo, descriptor) {
+  return `${descriptor(
+    optionInfo.name,
+    choiceInfo.value
+  )} is deprecated. Prettier now treats it as ${descriptor(
+    optionInfo.name,
+    choiceInfo.redirect
+  )}.`;
+}
+
+function normalizeApiOptions(options, optionInfos, opts) {
+  return normalizeOptions$1(
+    options,
+    optionInfos,
+    Object.assign({ descriptor: optionsDescriptor.apiDescriptor }, opts)
+  );
+}
+
+function normalizeCliOptions(options, optionInfos, opts) {
+  const args = options["_"] || [];
+
+  const newOptions = normalizeOptions$1(
+    Object.keys(options).reduce(
+      (reduced, key) =>
+        Object.assign(
+          reduced,
+          key.length === 1 // omit alias
+            ? null
+            : { [key]: options[key] }
+        ),
+      {}
+    ),
+    optionInfos,
+    Object.assign({ descriptor: optionsDescriptor.cliDescriptor }, opts)
+  );
+  newOptions["_"] = args;
+
+  return newOptions;
+}
+
+var optionsNormalizer = {
+  normalizeApiOptions,
+  normalizeCliOptions
+};
+
+class ConfigError$1 extends Error {}
+class DebugError extends Error {}
+
+var errors = {
+  ConfigError: ConfigError$1,
+  DebugError
+};
+
+function concat$2(parts) {
+  return { type: "concat", parts };
+}
+
+function indent$2(contents) {
+  return { type: "indent", contents };
+}
+
+function align$1(n, contents) {
+  return { type: "align", contents, n };
+}
+
+function group$1(contents, opts) {
+  opts = opts || {};
+
+  return {
+    type: "group",
+    contents: contents,
+    break: !!opts.shouldBreak,
+    expandedStates: opts.expandedStates
+  };
+}
+
+function dedentToRoot(contents) {
+  return align$1(-Infinity, contents);
+}
+
+function markAsRoot(contents) {
+  return align$1({ type: "root" }, contents);
+}
+
+function dedent$2(contents) {
+  return align$1(-1, contents);
+}
+
+function conditionalGroup$1(states, opts) {
+  return group$1(
+    states[0],
+    Object.assign(opts || {}, { expandedStates: states })
+  );
+}
+
+function fill$1(parts) {
+  return { type: "fill", parts };
+}
+
+function ifBreak$1(breakContents, flatContents) {
+  return { type: "if-break", breakContents, flatContents };
+}
+
+function lineSuffix$1(contents) {
+  return { type: "line-suffix", contents };
+}
+
+const lineSuffixBoundary$1 = { type: "line-suffix-boundary" };
+const breakParent$2 = { type: "break-parent" };
+const line$3 = { type: "line" };
+const softline$1 = { type: "line", soft: true };
+const hardline$2 = concat$2([{ type: "line", hard: true }, breakParent$2]);
+const singleLine$1 = { type: "line", single: true };
+const singleSoftLine$1 = { type: "line", soft: true, single: true };
+const singleHardLine$2 = concat$2([
+  { type: "line", hard: true, single: true },
+  breakParent$2
+]);
+const literalline$1 = concat$2([
+  { type: "line", hard: true, literal: true },
+  breakParent$2
+]);
+const cursor$1 = { type: "cursor", placeholder: Symbol("cursor") };
+
+function join$2(sep, arr) {
+  const res = [];
+
+  for (let i = 0; i < arr.length; i++) {
+    if (i !== 0) {
+      res.push(sep);
+    }
+
+    res.push(arr[i]);
+  }
+
+  return concat$2(res);
+}
+
+function addAlignmentToDoc$1(doc, size, tabWidth) {
+  let aligned = doc;
+  if (size > 0) {
+    // Use indent to add tabs for all the levels of tabs we need
+    for (let i = 0; i < Math.floor(size / tabWidth); ++i) {
+      aligned = indent$2(aligned);
+    }
+    // Use align for all the spaces that are needed
+    aligned = align$1(size % tabWidth, aligned);
+    // size is absolute from 0 and not relative to the current
+    // indentation, so we use -Infinity to reset the indentation to 0
+    aligned = align$1(-Infinity, aligned);
+  }
+  return aligned;
+}
+
+var docBuilders$2 = {
+  concat: concat$2,
+  join: join$2,
+  line: line$3,
+  softline: softline$1,
+  hardline: hardline$2,
+  singleLine: singleLine$1,
+  singleSoftLine: singleSoftLine$1,
+  singleHardLine: singleHardLine$2,
+  literalline: literalline$1,
+  group: group$1,
+  conditionalGroup: conditionalGroup$1,
+  fill: fill$1,
+  lineSuffix: lineSuffix$1,
+  lineSuffixBoundary: lineSuffixBoundary$1,
+  cursor: cursor$1,
+  breakParent: breakParent$2,
+  ifBreak: ifBreak$1,
+  indent: indent$2,
+  align: align$1,
+  addAlignmentToDoc: addAlignmentToDoc$1,
+  markAsRoot,
+  dedentToRoot,
+  dedent: dedent$2
 };
 
 const concat$3 = docBuilders$2.concat;
@@ -5085,7 +5089,7 @@ function printDocToString$2(doc, options) {
                   if (
                     out.length &&
                     typeof out[out.length - 1] === "string" &&
-                    (options.parser !== "markdown" ||
+                    (!util$1.isParser(options, "markdown") ||
                       // preserve markdown's `break` node (two trailing spaces)
                       !/\S {2}$/.test(out[out.length - 1]))
                   ) {
@@ -5496,9 +5500,9 @@ const cursor = docBuilders$1.cursor;
 
 const childNodesCacheKey = Symbol("child-nodes");
 
-const addLeadingComment = utilShared.addLeadingComment;
-const addTrailingComment = utilShared.addTrailingComment;
-const addDanglingComment = utilShared.addDanglingComment;
+const addLeadingComment$1 = utilShared.addLeadingComment;
+const addTrailingComment$1 = utilShared.addTrailingComment;
+const addDanglingComment$1 = utilShared.addDanglingComment;
 
 function getSortedChildNodes(node, text, options, resultArray) {
   if (!node) {
@@ -5665,7 +5669,7 @@ function attach(comments, ast, text, options) {
       (options.parser === "json" || options.parser === "json5") &&
       locStart(comment) - locStart(ast) <= 0
     ) {
-      addLeadingComment(ast, comment);
+      addLeadingComment$1(ast, comment);
       return;
     }
 
@@ -5699,15 +5703,15 @@ function attach(comments, ast, text, options) {
         // We're good
       } else if (followingNode) {
         // Always a leading comment.
-        addLeadingComment(followingNode, comment);
+        addLeadingComment$1(followingNode, comment);
       } else if (precedingNode) {
-        addTrailingComment(precedingNode, comment);
+        addTrailingComment$1(precedingNode, comment);
       } else if (enclosingNode) {
-        addDanglingComment(enclosingNode, comment);
+        addDanglingComment$1(enclosingNode, comment);
       } else {
         // There are no nodes, let's attach it to the root of the ast
         /* istanbul ignore next */
-        addDanglingComment(ast, comment);
+        addDanglingComment$1(ast, comment);
       }
     } else if (util$1.hasNewline(text, locEnd(comment))) {
       if (
@@ -5717,15 +5721,15 @@ function attach(comments, ast, text, options) {
       } else if (precedingNode) {
         // There is content before this comment on the same line, but
         // none after it, so prefer a trailing comment of the previous node.
-        addTrailingComment(precedingNode, comment);
+        addTrailingComment$1(precedingNode, comment);
       } else if (followingNode) {
-        addLeadingComment(followingNode, comment);
+        addLeadingComment$1(followingNode, comment);
       } else if (enclosingNode) {
-        addDanglingComment(enclosingNode, comment);
+        addDanglingComment$1(enclosingNode, comment);
       } else {
         // There are no nodes, let's attach it to the root of the ast
         /* istanbul ignore next */
-        addDanglingComment(ast, comment);
+        addDanglingComment$1(ast, comment);
       }
     } else {
       if (
@@ -5747,15 +5751,15 @@ function attach(comments, ast, text, options) {
         }
         tiesToBreak.push(comment);
       } else if (precedingNode) {
-        addTrailingComment(precedingNode, comment);
+        addTrailingComment$1(precedingNode, comment);
       } else if (followingNode) {
-        addLeadingComment(followingNode, comment);
+        addLeadingComment$1(followingNode, comment);
       } else if (enclosingNode) {
-        addDanglingComment(enclosingNode, comment);
+        addDanglingComment$1(enclosingNode, comment);
       } else {
         // There are no nodes, let's attach it to the root of the ast
         /* istanbul ignore next */
-        addDanglingComment(ast, comment);
+        addDanglingComment$1(ast, comment);
       }
     }
   });
@@ -5809,9 +5813,9 @@ function breakTies(tiesToBreak, text, options) {
 
   tiesToBreak.forEach((comment, i) => {
     if (i < indexOfFirstLeadingComment) {
-      addTrailingComment(precedingNode, comment);
+      addTrailingComment$1(precedingNode, comment);
     } else {
-      addLeadingComment(followingNode, comment);
+      addLeadingComment$1(followingNode, comment);
     }
   });
 
@@ -8433,8 +8437,8 @@ function needsParens(path$$1, options) {
         parent.type === "ExpressionStatement" &&
         // TypeScript workaround for eslint/typescript-eslint-parser#267
         // See corresponding workaround in printer.js case: "Literal"
-        ((options.parser !== "typescript" && !parent.directive) ||
-          (options.parser === "typescript" &&
+        ((!util$1.isParser(options, "typescript") && !parent.directive) ||
+          (util$1.isParser(options, "typescript") &&
             options.originalText.substr(options.locStart(node) - 1, 1) === "("))
       ) {
         // To avoid becoming a directive
@@ -8661,6 +8665,8 @@ const willBreak = docUtils.willBreak;
 const isLineNext = docUtils.isLineNext;
 const isEmpty = docUtils.isEmpty;
 
+const isParser$2 = util$1.isParser;
+
 function lineComma(options) {
   return !options.lenient ? "," : ifBreak("", ",");
 }
@@ -8676,7 +8682,9 @@ function closeBrace(options, force) {
 function closeSoftBrace(options, rightBrace) {
   return concat([
     !options.lenient
-      ? options.bracketSpacing ? line$2 : softline
+      ? options.bracketSpacing
+        ? line$2
+        : softline
       : singleSoftLine,
     rightBrace
   ]);
@@ -8704,7 +8712,9 @@ function blockArgument(options, body, argument) {
 function spaceAfterBreak(stmt, options) {
   return !options.lenient
     ? " "
-    : stmt && stmt.body && stmt.body.length === 0 ? singleHardLine : "";
+    : stmt && stmt.body && stmt.body.length === 0
+      ? singleHardLine
+      : "";
 }
 
 function shouldPrintParens(options, body) {
@@ -8774,8 +8784,8 @@ function genericPrint(path$$1, options, printPath, args) {
         (decorator.type === "Identifier" ||
           decorator.type === "MemberExpression" ||
           decorator.type === "OptionalMemberExpression" ||
-          (decorator.type === "CallExpression" &&
-            decorator.type === "OptionalCallExpression" &&
+          ((decorator.type === "CallExpression" ||
+            decorator.type === "OptionalCallExpression") &&
             (decorator.arguments.length === 0 ||
               (decorator.arguments.length === 1 &&
                 (isStringLiteral(decorator.arguments[0]) ||
@@ -8970,7 +8980,9 @@ function formatTernaryOperator(path$$1, options, print, operatorOptions) {
   // outer-most ConditionalExpression.
   const maybeGroup = doc$$1 =>
     operatorOpts.breakNested
-      ? parent === firstNonConditionalParent ? group(doc$$1) : doc$$1
+      ? parent === firstNonConditionalParent
+        ? group(doc$$1)
+        : doc$$1
       : group(doc$$1); // Always group in normal mode.
 
   // Break the closing paren to keep the chain right after it:
@@ -9911,7 +9923,9 @@ function printPathNoParens(path$$1, options, print, args) {
           ifBreak(
             canHaveTrailingSeparator &&
             (separator !== "," || shouldPrintComma(options))
-              ? separator === "," ? lineComma(options) : separator
+              ? separator === ","
+                ? lineComma(options)
+                : separator
               : ""
           ),
           closeSoftBrace(options, rightBrace),
@@ -10102,7 +10116,7 @@ function printPathNoParens(path$$1, options, print, args) {
       // See corresponding workaround in needs-parens.js
       const grandParent = path$$1.getParentNode(1);
       const isTypeScriptDirective =
-        options.parser === "typescript" &&
+        isParser$2(options, "typescript") &&
         typeof n.value === "string" &&
         grandParent &&
         (grandParent.type === "Program" ||
@@ -10478,7 +10492,9 @@ function printPathNoParens(path$$1, options, print, args) {
                 )
               ])
             )
-          : options.lenient ? "{}" : "",
+          : options.lenient
+            ? "{}"
+            : "",
         closeBrace(options)
       ]);
     case "SwitchCase": {
@@ -10735,7 +10751,9 @@ function printPathNoParens(path$$1, options, print, args) {
           concat([
             hasOwnLineComment
               ? hardline
-              : hasComment && !isOpeningFragment ? " " : "",
+              : hasComment && !isOpeningFragment
+                ? " "
+                : "",
             comments.printDanglingComments(path$$1, options, true)
           ])
         ),
@@ -12000,7 +12018,7 @@ function printPropertyKey(path$$1, options, print) {
   if (
     key.type === "Identifier" &&
     !node.computed &&
-    options.parser === "json"
+    isParser$2(options, "json")
   ) {
     // a -> "a"
     return path$$1.call(
@@ -12018,7 +12036,7 @@ function printPropertyKey(path$$1, options, print) {
     isStringLiteral(key) &&
     isIdentifierName(key.value) &&
     !node.computed &&
-    options.parser !== "json"
+    !isParser$2(options, "json")
   ) {
     // 'a' -> a
     return path$$1.call(
@@ -12797,7 +12815,7 @@ function printTypeParameters(path$$1, options, print, paramsKey) {
         ])
       ),
       ifBreak(
-        options.parser !== "typescript" && shouldPrintComma(options, "all")
+        !isParser$2(options, "typescript") && shouldPrintComma(options, "all")
           ? lineComma(options)
           : ""
       ),
@@ -14260,7 +14278,7 @@ function isTypeAnnotationAFunction(node, options) {
 }
 
 function isNodeStartingWithDeclare(node, options) {
-  if (!(options.parser === "flow" || options.parser === "typescript")) {
+  if (!(isParser$2(options, "flow") || isParser$2(options, "typescript"))) {
     return false;
   }
   return (
@@ -17188,6 +17206,7 @@ function parse$2(text, opts) {
 var parser = { parse: parse$2, resolveParser: resolveParser$1 };
 
 const getSupportInfo$1 = support.getSupportInfo;
+const isParser = util$1.isParser;
 
 const resolveParser = parser.resolveParser;
 
@@ -17268,7 +17287,7 @@ function normalize(options, opts) {
     }
   });
 
-  if (rawOptions.parser === "json") {
+  if (isParser(rawOptions, "json")) {
     rawOptions.trailingComma = "none";
   }
 
@@ -17518,6 +17537,7 @@ const concat$5 = docBuilders$6.concat;
 const hardline$4 = docBuilders$6.hardline;
 const addAlignmentToDoc$2 = docBuilders$6.addAlignmentToDoc;
 const docUtils$5 = doc$3.utils;
+const isParser$3 = util$1.isParser;
 
 function printAstToDoc(ast, options, addAlignmentSize) {
   addAlignmentSize = addAlignmentSize || 0;
@@ -17566,7 +17586,7 @@ function printAstToDoc(ast, options, addAlignmentSize) {
   }
   docUtils$5.propagateBreaks(doc$$2);
 
-  if (options.parser === "json" || options.parser === "json5") {
+  if (isParser$3(options, "json") || isParser$3(options, "json5")) {
     doc$$2 = concat$5([doc$$2, hardline$4]);
   }
 

@@ -19,6 +19,7 @@ If you want to use Lenient syntax by default, open Atom config (on OS X from Ato
 
 TODO: Support local Prettier settings
 TODO: Git integration shows changes between Lenient and underlying JS
+TOSO: Add Compat mode option
 TODO: Limit size of file for which Lenient kicks in
 
 ## Development

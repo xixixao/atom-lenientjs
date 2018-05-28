@@ -48,38 +48,45 @@ const prettierOptionsToJS = {
   semi: true,
 };
 
-const parser = plugins => {
+const parser = (plugins, language) => {
   const babylonOptions = {
     ...defaultBabylonOptions,
     plugins: [...defaultBabylonOptions.plugins, ...plugins],
   };
-  return {
-    parser: (text, {babylon}, options) =>
-      babylon(text, {}, options, babylonOptions),
+  const isJSON = language === 'json';
+  const parser = (text, {babylon}) =>
+    babylon(text, {}, isJSON ? {parser: 'json'} : {}, babylonOptions);
+  parser.printer = isJSON ? 'json' : 'js';
+  return {parser};
+};
+
+// Options:
+//    "language": 'js' or 'json'
+export default ({language}) => {
+  const jsToLenientOptions = {
+    ...defaultPrettierOptions,
+    ...prettierOptionsToLenient,
+    ...parser(babelPluginsFromJS, language),
   };
+
+  const jsToLenient = text => prettier.format(text, jsToLenientOptions);
+
+  const lenientToJSOptions = {
+    ...defaultPrettierOptions,
+    ...prettierOptionsToJS,
+    ...parser(babelPluginsFromLenient, language),
+  };
+
+  const lenientToJS = text => prettier.format(text, lenientToJSOptions);
+
+  const lenientToLenientOptions = {
+    ...defaultPrettierOptions,
+    ...prettierOptionsToLenient,
+    ...parser(babelPluginsFromLenient, language),
+  };
+
+  const lenientToLenient = text =>
+    prettier.format(text, lenientToLenientOptions);
+
+  return {jsToLenient, lenientToJS, lenientToLenient};
 };
-
-const jsToLenientOptions = {
-  ...defaultPrettierOptions,
-  ...prettierOptionsToLenient,
-  ...parser(babelPluginsFromJS),
-};
-
-export const jsToLenient = text => prettier.format(text, jsToLenientOptions);
-
-const lenientToJSOptions = {
-  ...defaultPrettierOptions,
-  ...prettierOptionsToJS,
-  ...parser(babelPluginsFromLenient),
-};
-
-export const lenientToJS = text => prettier.format(text, lenientToJSOptions);
-
-const lenientToLenientOptions = {
-  ...defaultPrettierOptions,
-  ...prettierOptionsToLenient,
-  ...parser(babelPluginsFromLenient),
-};
-
-export const lenientToLenient = text =>
-  prettier.format(text, lenientToLenientOptions);

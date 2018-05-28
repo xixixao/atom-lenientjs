@@ -17,13 +17,11 @@ export default {
         let lastGrammar = null;
         const grammarSubscription = editor.observeGrammar(grammar => {
           const {scopeName} = grammar;
-          if (
-            !editor.buffer.isLenient &&
-            ((editor.getPath() || '').endsWith('.js') ||
-              ((lastGrammar || {}).scopeName || '').startsWith('source.js')) &&
-            scopeName === 'source.js.lenient'
-          ) {
-            this.enableLenient(editor, lastGrammar);
+          const toJS = scopeName === 'source.js.lenient';
+          const toJSON = scopeName === 'source.json.lenient';
+          if (!editor.buffer.isLenient && (toJS || toJSON)) {
+            const language = scopeNameToLanguage(scopeName);
+            this.enableLenient(editor, lastGrammar, language);
           } else if (editor.buffer.isLenient) {
             this.disableLenient(editor);
           }
@@ -37,11 +35,12 @@ export default {
     );
   },
 
-  enableLenient(editor, lastGrammar) {
+  enableLenient(editor, lastGrammar, language) {
     const hasBackingFile = !!editor.getPath();
     const hasUnsavedChanges = editor.isModified();
     if (hasBackingFile) {
-      editor.buffer.file = getMappedFile(editor.buffer.file, error => {
+      const currentFile = editor.buffer.file;
+      editor.buffer.file = getMappedFile(currentFile, language, error => {
         this.onWriteError("Couldn't save Lenient file", error);
       });
       if (!hasUnsavedChanges) {
@@ -49,7 +48,7 @@ export default {
       }
     }
     if (hasUnsavedChanges) {
-      const {jsToLenient} = require('./transpile');
+      const {jsToLenient} = require('./transpile')({language});
       transpileEditor(editor, jsToLenient, error => {
         this.onWriteError("Couldn't convert to Lenient", error);
         editor.setGrammar(lastGrammar);
@@ -69,7 +68,8 @@ export default {
       }
     }
     if (hasUnsavedChanges) {
-      const {lenientToJS} = require('./transpile');
+      const language = scopeNameToLanguage(editor.getGrammar().scopeName);
+      const {lenientToJS} = require('./transpile')({language});
       transpileEditor(editor, lenientToJS, error => {
         this.onWriteError("Couldn't convert from Lenient", error);
       });
@@ -102,6 +102,9 @@ export default {
   },
 };
 
+const scopeNameToLanguage = scopeName =>
+  scopeName === 'source.js.lenient' ? 'js' : 'json';
+
 const transpileEditor = (editor, fn, onError) => {
   try {
     editor.setText(fn(editor.getText()));
@@ -112,8 +115,8 @@ const transpileEditor = (editor, fn, onError) => {
   }
 };
 
-const getMappedFile = (file, onError) => {
-  const {jsToLenient, lenientToJS} = require('./transpile');
+const getMappedFile = (file, language, onError) => {
+  const {jsToLenient, lenientToJS} = require('./transpile')({language});
   return {
     getPath: () => file.getPath(),
     createReadStream: () => readThrough(file.createReadStream(), jsToLenient),
