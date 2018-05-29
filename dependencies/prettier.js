@@ -23,7 +23,7 @@ var main = "./index.js";
 var engines = {"node":">=4"};
 var dependencies = {"@babel/code-frame":"7.0.0-beta.40","@glimmer/syntax":"0.30.3","babylon":"7.0.0-beta.34","camelcase":"4.1.0","chalk":"2.1.0","cjk-regex":"1.0.2","cosmiconfig":"3.1.0","dashify":"0.2.2","dedent":"0.7.0","diff":"3.2.0","editorconfig":"0.15.0","editorconfig-to-prettier":"0.0.6","emoji-regex":"6.5.1","escape-string-regexp":"1.0.5","esutils":"2.0.2","find-parent-dir":"0.3.0","find-project-root":"1.1.1","flow-parser":"0.70","get-stream":"3.0.0","globby":"6.1.0","graphql":"0.13.2","html-tag-names":"1.1.2","ignore":"3.3.7","jest-docblock":"22.2.2","json-stable-stringify":"1.0.1","leven":"2.1.0","lodash.uniqby":"4.7.0","mem":"1.1.0","minimatch":"3.0.4","minimist":"1.2.0","parse5":"3.0.3","postcss-less":"1.1.5","postcss-media-query-parser":"0.2.3","postcss-scss":"1.0.5","postcss-selector-parser":"2.2.3","postcss-values-parser":"1.5.0","remark-frontmatter":"1.1.0","remark-parse":"5.0.0","resolve":"1.5.0","semver":"5.4.1","string-width":"2.1.1","typescript":"2.9.0-dev.20180421","typescript-eslint-parser":"eslint/typescript-eslint-parser#2960b002746c01fb9cb15bb5f4c1e7e925c6519a","unicode-regex":"1.0.1","unified":"6.1.6"};
 var devDependencies = {"babel-cli":"6.24.1","babel-preset-es2015":"6.24.1","codecov":"2.2.0","cross-env":"5.0.5","eslint":"4.18.2","eslint-config-prettier":"2.9.0","eslint-friendly-formatter":"3.0.0","eslint-plugin-import":"2.9.0","eslint-plugin-prettier":"2.6.0","eslint-plugin-react":"7.7.0","jest":"21.1.0","mkdirp":"0.5.1","prettier":"1.12.1","prettylint":"1.0.0","rimraf":"2.6.2","rollup":"0.47.6","rollup-plugin-commonjs":"8.2.6","rollup-plugin-json":"2.1.1","rollup-plugin-node-builtins":"2.0.0","rollup-plugin-node-globals":"1.1.0","rollup-plugin-node-resolve":"2.0.0","rollup-plugin-replace":"1.2.1","shelljs":"0.8.1","snapshot-diff":"0.2.2","strip-ansi":"4.0.0","tempy":"0.2.1","uglify-es":"3.3.9","webpack":"2.6.1"};
-var scripts = {"prepublishOnly":"echo \"Error: must publish from dist/\" && exit 1","prepare-release":"yarn && yarn build && yarn test:dist","test":"jest","test:dist":"node ./scripts/test-dist.js","test:lenient":"jest --testRegex 'tests/lenient(-compat)?-(to|from)-js/jsfmt\\.spec\\.js$'","test-integration":"jest tests_integration","lint":"cross-env EFF_NO_LINK_RULES=true eslint . --format node_modules/eslint-friendly-formatter","lint-docs":"prettylint {.,docs,website,website/blog}/*.md","build":"node ./scripts/build/build.js","build-docs":"node ./scripts/build/build-docs.js","check-deps":"node ./scripts/check-deps.js"};
+var scripts = {"prepublishOnly":"echo \"Error: must publish from dist/\" && exit 1","prepare-release":"yarn && yarn build && yarn test:dist","test":"jest","test:dist":"node ./scripts/test-dist.js","test:lenient":"jest --testRegex 'tests/lenient(-compat)?-(to|from)-(js|json)/jsfmt\\.spec\\.js$'","test-integration":"jest tests_integration","lint":"cross-env EFF_NO_LINK_RULES=true eslint . --format node_modules/eslint-friendly-formatter","lint-docs":"prettylint {.,docs,website,website/blog}/*.md","build":"node ./scripts/build/build.js","build-docs":"node ./scripts/build/build-docs.js","check-deps":"node ./scripts/check-deps.js"};
 var _package = {
 	name: name,
 	version: version$1,
@@ -5500,6 +5500,8 @@ const cursor = docBuilders$1.cursor;
 
 const childNodesCacheKey = Symbol("child-nodes");
 
+const isParser$3 = util$1.isParser;
+
 const addLeadingComment$1 = utilShared.addLeadingComment;
 const addTrailingComment$1 = utilShared.addTrailingComment;
 const addDanglingComment$1 = utilShared.addDanglingComment;
@@ -5666,7 +5668,7 @@ function attach(comments, ast, text, options) {
 
   comments.forEach((comment, i) => {
     if (
-      (options.parser === "json" || options.parser === "json5") &&
+      (isParser$3(options, "json") || isParser$3(options, "json5")) &&
       locStart(comment) - locStart(ast) <= 0
     ) {
       addLeadingComment$1(ast, comment);
@@ -12036,7 +12038,7 @@ function printPropertyKey(path$$1, options, print) {
     isStringLiteral(key) &&
     isIdentifierName(key.value) &&
     !node.computed &&
-    !isParser$2(options, "json")
+    (options.lenient || !isParser$2(options, "json"))
   ) {
     // 'a' -> a
     return path$$1.call(
@@ -17537,7 +17539,7 @@ const concat$5 = docBuilders$6.concat;
 const hardline$4 = docBuilders$6.hardline;
 const addAlignmentToDoc$2 = docBuilders$6.addAlignmentToDoc;
 const docUtils$5 = doc$3.utils;
-const isParser$3 = util$1.isParser;
+const isParser$4 = util$1.isParser;
 
 function printAstToDoc(ast, options, addAlignmentSize) {
   addAlignmentSize = addAlignmentSize || 0;
@@ -17586,7 +17588,7 @@ function printAstToDoc(ast, options, addAlignmentSize) {
   }
   docUtils$5.propagateBreaks(doc$$2);
 
-  if (isParser$3(options, "json") || isParser$3(options, "json5")) {
+  if (isParser$4(options, "json") || isParser$4(options, "json5")) {
     doc$$2 = concat$5([doc$$2, hardline$4]);
   }
 
