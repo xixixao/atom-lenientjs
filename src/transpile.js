@@ -1,5 +1,6 @@
 'use babel';
 
+const babylon = require('../dependencies/parser-babylon');
 const prettier = require('../dependencies/prettier');
 
 const defaultBabylonOptions = {
@@ -37,6 +38,7 @@ const defaultPrettierOptions = {
   jsxBracketSameLine: true,
   singleQuote: true,
   trailingComma: 'all',
+  plugins: [babylon],
 };
 
 const prettierOptionsToLenient = {
