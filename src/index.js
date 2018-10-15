@@ -62,7 +62,7 @@ export default {
     const hasBackingFile = !!editor.getPath();
     const hasUnsavedChanges = editor.isModified();
     if (hasBackingFile) {
-      editor.buffer.file = editor.buffer.file.originalFile;
+      editor.buffer.file = getOriginalFile(editor.buffer.file);
       if (!hasUnsavedChanges) {
         editor.buffer.load({internal: true});
       }
@@ -77,6 +77,7 @@ export default {
     editor.buffer.isLenient = false;
   },
 
+  // TODO: immediately kill all error notifications after successful write
   onWriteError(message, error) {
     atom.notifications.addError(message, {
       detail: error.toString(),
@@ -117,17 +118,15 @@ const transpileEditor = (editor, fn, onError) => {
 
 const getMappedFile = (file, language, onError) => {
   const {jsToLenient, lenientToJS} = require('./transpile')({language});
-  return {
-    getPath: () => file.getPath(),
-    createReadStream: () => readThrough(file.createReadStream(), jsToLenient),
-    createWriteStream: () => writeThroughTo(file, lenientToJS, onError),
-    existsSync: file.existsSync,
-    onDidChange: file.onDidChange,
-    onDidDelete: file.onDidDelete,
-    onDidRename: file.onDidRename,
-    originalFile: file,
-  };
+  const newFile = newForwardingObject(file);
+  newFile.createReadStream = () =>
+    readThrough(file.createReadStream(), jsToLenient);
+  newFile.createWriteStream = () => writeThroughTo(file, lenientToJS, onError);
+  newFile._originalFile = file;
+  return newFile;
 };
+
+const getOriginalFile = file => file._originalFile;
 
 const readThrough = (source, fn) => source.pipe(through(fn));
 
@@ -149,17 +148,46 @@ const through = fn =>
 //   return newDestination;
 // };
 
-const writeThroughTo = (file, fn, onError) =>
-  new WriteStream({
+const writeThroughTo = (file, fn, onError) => {
+  let underlyingStream = null;
+  return new WriteStream({
+    // Note that Atom actually doesn't stream files atm., we get the whole
+    // file in one call
     write(text, _encoding, callback) {
+      let transformed = null;
       try {
-        const transformed = fn(text.toString());
-        // Now we managed to transform, so it's safe to write to the file
-        file.createWriteStream().write(transformed, callback);
+        transformed = fn(text.toString());
       } catch (error) {
         onError(error);
         // Make sure Atom knows the saving failed
         callback(error);
+        return;
       }
+      // Now we managed to transform, so it's safe to write to the file
+      underlyingStream = file.createWriteStream();
+      underlyingStream.write(transformed, callback);
+    },
+
+    final(callback) {
+      underlyingStream.end(callback);
     },
   });
+};
+
+const newForwardingObject = object => {
+  // Poor man's facade! We cannot use prototypical inheritence because Atom
+  // would think we're an ordinary File and would read directly from disk
+  // instead of using `createReadStream`
+  const newObject = {};
+  let methods = object;
+  while (methods != null && methods.constructor !== Object) {
+    for (const name of Object.getOwnPropertyNames(methods)) {
+      const method = methods[name];
+      if (name[0] !== '_' && typeof method === 'function') {
+        newObject[name] = method.bind(object);
+      }
+    }
+    methods = Object.getPrototypeOf(methods);
+  }
+  return newObject;
+};
