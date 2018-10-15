@@ -21,6 +21,7 @@ TODO: Support local Prettier settings
 TODO: Git integration shows changes between Lenient and underlying JS
 TOSO: Add Compat mode option
 TODO: Limit size of file for which Lenient kicks in
+TODO: Support file duplication/renaming
 
 ## Development
 
