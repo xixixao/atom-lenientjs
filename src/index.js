@@ -6,6 +6,9 @@ import * as nodeStream from 'stream';
 const TransformStream = nodeStream.Transform;
 const WriteStream = nodeStream.Writable;
 
+const COULDNT_SAVE_LENIENT_FILE = "Couldn't save Lenient file";
+const COULDNT_CONVERT_TO_LENIENT = "Couldn't convert to Lenient";
+
 export default {
   subscriptions: null,
   lenientEditors: [],
@@ -41,7 +44,7 @@ export default {
     if (hasBackingFile) {
       const currentFile = editor.buffer.file;
       editor.buffer.file = getMappedFile(currentFile, language, error => {
-        this.onWriteError("Couldn't save Lenient file", error);
+        onWriteError(COULDNT_SAVE_LENIENT_FILE, error);
       });
       if (!hasUnsavedChanges) {
         editor.buffer.load({internal: true});
@@ -50,7 +53,7 @@ export default {
     if (hasUnsavedChanges) {
       const {jsToLenient} = require('./transpile')({language});
       transpileEditor(editor, jsToLenient, error => {
-        this.onWriteError("Couldn't convert to Lenient", error);
+        onWriteError(COULDNT_CONVERT_TO_LENIENT, error);
         editor.setGrammar(lastGrammar);
       });
     }
@@ -71,19 +74,10 @@ export default {
       const language = scopeNameToLanguage(editor.getGrammar().scopeName);
       const {lenientToJS} = require('./transpile')({language});
       transpileEditor(editor, lenientToJS, error => {
-        this.onWriteError("Couldn't convert from Lenient", error);
+        onWriteError("Couldn't convert from Lenient", error);
       });
     }
     editor.buffer.isLenient = false;
-  },
-
-  // TODO: immediately kill all error notifications after successful write
-  onWriteError(message, error) {
-    atom.notifications.addError(message, {
-      detail: error.toString(),
-      stack: error.stack,
-      dismissable: true,
-    });
   },
 
   deactivate() {
@@ -101,6 +95,27 @@ export default {
     });
     this.lenientEditors = [];
   },
+};
+
+const onWriteError = (message, error) => {
+  atom.notifications.addError(message, {
+    detail: error.toString(),
+    stack: error.stack,
+    dismissable: true,
+  });
+};
+
+const onWriteSuccess = () => {
+  atom.notifications
+    .getNotifications()
+    .filter(notification => {
+      const message = notification.getMessage();
+      return (
+        message === COULDNT_SAVE_LENIENT_FILE ||
+        message === COULDNT_CONVERT_TO_LENIENT
+      );
+    })
+    .forEach(notification => notification.dismiss());
 };
 
 const scopeNameToLanguage = scopeName =>
@@ -170,6 +185,7 @@ const writeThroughTo = (file, fn, onError) => {
 
     final(callback) {
       underlyingStream.end(callback);
+      onWriteSuccess();
     },
   });
 };
