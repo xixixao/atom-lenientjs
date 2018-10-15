@@ -1,7 +1,7 @@
 {
   "name": "lenientjs",
   "main": "src/index.js",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Atom integration for Lenient JS syntax",
   "homepage": "https://xixixao.github.com/lenientjs",
   "keywords": [
