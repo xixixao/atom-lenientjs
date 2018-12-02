@@ -365,40 +365,28 @@
         {
           "name": "meta.switch.js",
           "begin": "(?<!\\.)\\s*+\\b(switch)\\b",
-          "end": "\\s*(\\})",
+          "end": "^",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.switch.js" }
+          },
+          "patterns": [
+            { "include": "#expression" }
+          ]
+        },
+        {
+          "begin": "(?<!\\.)\\s*+\\b(case|default)\\b",
+          "end": "\\s*(:)((?=::)|(?!:))|^",
           "beginCaptures": {
             "1": { "name": "keyword.control.switch.js" }
           },
           "endCaptures": {
-            "1": { "name": "meta.brace.curly.switchEnd.js" }
+            "1": { "name": "keyword.operator.js" }
           },
           "patterns": [
-            { "include": "#round-brackets" },
-            {
-              "begin": "\\s*+({)",
-              "end": "\\s*(?=})",
-              "beginCaptures": {
-                "1": { "name": "meta.brace.curly.switchStart.js" }
-              },
-              "patterns": [
-                {
-                  "begin": "(?<!\\.)\\s*+\\b(case|default)\\b",
-                  "end": "\\s*(:)((?=::)|(?!:))",
-                  "beginCaptures": {
-                    "1": { "name": "keyword.control.switch.js" }
-                  },
-                  "endCaptures": {
-                    "1": { "name": "keyword.operator.js" }
-                  },
-                  "patterns": [
-                    { "include": "#expression" }
-                  ]
-                },
-                { "include": "$self" }
-              ]
-            }
+            { "include": "#expression" }
           ]
-        }
+        },
+        { "include": "$self" }
       ]
     },
     "brackets": {
