@@ -20,9 +20,12 @@ export default {
         let lastGrammar = null;
         const grammarSubscription = editor.observeGrammar(grammar => {
           const {scopeName} = grammar;
-          const toJS = scopeName === 'source.js.lenient';
-          const toJSON = scopeName === 'source.json.lenient';
-          if (!editor.buffer.isLenient && (toJS || toJSON)) {
+          const shouldConvertToJS = scopeName === 'source.js.lenient';
+          const shouldConvertToJSON = scopeName === 'source.json.lenient';
+          if (
+            !editor.buffer.isLenient &&
+            (shouldConvertToJS || shouldConvertToJSON)
+          ) {
             const language = scopeNameToLanguage(scopeName);
             this.enableLenient(editor, lastGrammar, language);
           } else if (editor.buffer.isLenient) {
