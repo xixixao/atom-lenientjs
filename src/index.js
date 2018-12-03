@@ -53,7 +53,7 @@ export default {
         editor.buffer.load({internal: true});
       }
     }
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && lastGrammar != null) {
       const {jsToLenient} = require('./transpile')({language});
       transpileEditor(editor, jsToLenient, error => {
         onWriteError(COULDNT_CONVERT_TO_LENIENT, error);
@@ -85,17 +85,20 @@ export default {
 
   deactivate() {
     this.subscriptions.dispose();
-    this.lenientEditors.forEach(editor => {
-      if (editor.buffer.isLenient) {
-        try {
-          this.disableLenient(editor);
-        } catch (error) {
+    // We don't want to switch off lenient grammar when user is just closing
+    // editor
+    if (!atom.unloading) {
+      this.lenientEditors.forEach(editor => {
+        if (editor.buffer.isLenient) {
           // don't propagate error to make sure deactivation succeeds
           // and make sure this editor works when the package is reactivated
+          try {
+            this.disableLenient(editor);
+          } catch (error) {}
           editor.buffer.isLenient = false;
         }
-      }
-    });
+      });
+    }
     this.lenientEditors = [];
   },
 };
@@ -122,7 +125,7 @@ const onWriteSuccess = () => {
 };
 
 const scopeNameToLanguage = scopeName =>
-  scopeName === 'source.js.lenient' ? 'js' : 'json';
+  scopeName.startsWith('source.json') ? 'json' : 'js';
 
 const transpileEditor = (editor, fn, onError) => {
   try {
