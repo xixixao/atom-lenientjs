@@ -17,11 +17,12 @@ If you want to use Lenient syntax by default, open Atom config (on OS X from Ato
       ]
 ```
 
-TODO: Support local Prettier settings
-TODO: Git integration shows changes between Lenient and underlying JS
-TOSO: Add Compat mode option
-TODO: Limit size of file for which Lenient kicks in
-TODO: Support file duplication/renaming
+## Known Issues
+
+- No Support for local Prettier settings
+- Git integration shows changes between Lenient and underlying JS
+- No compat mode option
+- No size limit of file for which Lenient kicks in
 
 ## Development
 
